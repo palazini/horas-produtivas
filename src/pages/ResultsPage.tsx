@@ -120,6 +120,7 @@ export function ResultsPage() {
 
     // Selected machine for modal drill-down
     const [selectedMachine, setSelectedMachine] = useState<MachineRow | null>(null)
+    const [hiddenDays, setHiddenDays] = useState<string[]>([])
 
     async function load(targetMonth?: string | null) {
         setBusy(true)
@@ -136,6 +137,7 @@ export function ResultsPage() {
                 setMonthStart(null)
                 setMachines([])
                 setDailyRows([])
+                setHiddenDays([])
                 setTargetsDefaults([])
                 setTargetsDaily({})
                 if (targetMonth) {
@@ -155,6 +157,7 @@ export function ResultsPage() {
             setRefDate(ref)
             setMonthStart(ymd(ms))
             setSelectedDay(null) // Reset day selection when loading new month
+            setHiddenDays([])
 
             const [allMachines, monthDaily, tDef, td] = await Promise.all([
                 fetchMachinesAll(),
@@ -330,6 +333,8 @@ export function ResultsPage() {
             })
         }
     }, [dayList, dayHasProduction, effectiveTargetByMachineDay, machines, realByMachineDay, refDate, viewType])
+
+    const visibleDailyTrack = dailyTrack.filter(d => !hiddenDays.includes(d.day))
 
     const machineMetrics = useMemo(() => {
         if (!refDate || !monthStart) return [] as MachineMetrics[]
@@ -716,13 +721,31 @@ export function ResultsPage() {
                         title="Ritmo Diário — Meta x Real"
                         color="#1e3a5f"
                         subtitle={viewType === 'producao' ? 'Dias úteis + sábados trabalhados' : 'Dias úteis (sábado somado na sexta)'}
+                        headerAction={
+                            hiddenDays.length > 0 && (
+                                <button
+                                    onClick={() => setHiddenDays([])}
+                                    style={{
+                                        background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px',
+                                        padding: '4px 8px', fontSize: '11px', color: '#1d4ed8', fontWeight: 600,
+                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                                    }}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                    Exibir {hiddenDays.length} dias ocultos
+                                </button>
+                            )
+                        }
                     >
                         <div ref={resumoRef} style={{ overflowX: 'auto', background: '#fff' }}>
                             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0', fontSize: '14px' }}>
                                 <thead>
                                     <tr>
-                                        <Th left width={70}>Dia</Th>
-                                        {dailyTrack.map(d => {
+                                        <Th left width={100} style={{ background: '#1e3a5f', color: '#fff', borderBottom: 'none' }}>Dia</Th>
+                                        {visibleDailyTrack.map(d => {
                                             const isSelected = selectedDay === d.day
                                             return (
                                                 <Th
@@ -730,25 +753,48 @@ export function ResultsPage() {
                                                     onClick={() => handleDayClick(d.day)}
                                                     style={{
                                                         cursor: 'pointer',
-                                                        background: isSelected ? '#dbeafe' : undefined,
-                                                        color: isSelected ? '#1e3a5f' : undefined,
-                                                        borderBottom: isSelected ? '2px solid #3b82f6' : undefined
+                                                        background: isSelected ? '#ffffff' : '#1e3a5f',
+                                                        color: isSelected ? '#1e3a5f' : '#fff',
+                                                        borderBottom: isSelected ? 'none' : 'none'
                                                     }}
                                                 >
-                                                    <span style={{ fontSize: '16px', fontWeight: 700 }}>{dayjs(d.day).format('DD')}</span>
-                                                    {d.isSaturday && <span style={{ display: 'block', fontSize: '9px', fontWeight: 600 }}>SÁB</span>}
-                                                    {d.isSunday && <span style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#dc2626' }}>DOM</span>}
+                                                    <div className="group relative flex flex-col items-center justify-center">
+                                                        <span style={{ fontSize: '16px', fontWeight: 700 }}>{dayjs(d.day).format('DD')}</span>
+                                                        {d.isSaturday && <span style={{ display: 'block', fontSize: '9px', fontWeight: 600, opacity: 0.8 }}>SÁB</span>}
+                                                        {d.isSunday && <span style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#fca5a5' }}>DOM</span>}
+
+                                                        {/* Hide Button */}
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                setHiddenDays(prev => [...prev, d.day])
+                                                            }}
+                                                            className="absolute -top-3 -right-3 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            style={{
+                                                                background: '#fff', border: '1px solid #e5e7eb', borderRadius: '50%',
+                                                                width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                                                                color: '#64748b'
+                                                            }}
+                                                            title="Ocultar dia"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
                                                 </Th>
                                             )
                                         })}
-                                        <Th accent width={80}>TOTAL</Th>
+                                        <Th accent width={80} style={{ borderBottom: 'none' }}>TOTAL</Th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {/* Linha META */}
                                     <tr>
-                                        <Td left label>META</Td>
-                                        {dailyTrack.map(d => {
+                                        <Td left label style={{ background: '#1e3a5f', color: '#fff', borderBottom: '1px solid #334155' }}>META</Td>
+                                        {visibleDailyTrack.map(d => {
                                             const isSelected = selectedDay === d.day
                                             return (
                                                 <Td
@@ -765,8 +811,8 @@ export function ResultsPage() {
 
                                     {/* Linha REAL */}
                                     <tr>
-                                        <Td left label>REAL</Td>
-                                        {dailyTrack.map(d => {
+                                        <Td left label style={{ background: '#1e3a5f', color: '#fff', borderBottom: 'none' }}>REAL</Td>
+                                        {visibleDailyTrack.map(d => {
                                             const isSelected = selectedDay === d.day
                                             return (
                                                 <Td
@@ -781,22 +827,35 @@ export function ResultsPage() {
                                         <Td accent bold>{dailyTotals.real.toFixed(0)}</Td>
                                     </tr>
 
-                                    {/* Linha SALDO */}
+                                    {/* Linha % ATINGIDO */}
                                     <tr>
-                                        <Td left label>SALDO</Td>
-                                        {dailyTrack.map(d => {
-                                            const color = d.delta < 0 ? '#dc2626' : d.delta > 0 ? '#16a34a' : '#71717a'
+                                        <Td left label style={{ borderTop: 'none', background: '#1e3a5f', color: '#fff' }}>% ATING.</Td>
+                                        {visibleDailyTrack.map(d => {
+                                            const p = pct(d.real, d.meta)
                                             const isSelected = selectedDay === d.day
+                                            // Colors: On Dark bg -> Light Green/Red. On Light bg (selected) -> Normal Green/Red
+                                            const isGood = (p ?? 0) >= 1
+                                            const color = isSelected
+                                                ? (isGood ? '#16a34a' : '#dc2626')
+                                                : (isGood ? '#86efac' : '#fca5a5')
+
                                             return (
-                                                <Td key={d.day} style={{ color, fontWeight: 600, background: isSelected ? '#eff6ff' : undefined }}>
-                                                    {d.delta >= 0 ? '+' : ''}{d.delta.toFixed(0)}
+                                                <Td key={d.day} style={{
+                                                    color, fontWeight: 700,
+                                                    background: isSelected ? '#fff' : '#1e3a5f',
+                                                    borderTop: 'none',
+                                                    borderBottom: 'none'
+                                                }}>
+                                                    {pctLabel(p)}
                                                 </Td>
                                             )
                                         })}
                                         <Td bold style={{
-                                            color: dailyTotals.delta < 0 ? '#dc2626' : dailyTotals.delta > 0 ? '#16a34a' : '#71717a',
+                                            color: (pct(dailyTotals.real, dailyTotals.meta) ?? 0) >= 1 ? '#86efac' : '#fca5a5',
+                                            borderTop: 'none',
+                                            background: '#1e3a5f'
                                         }}>
-                                            {dailyTotals.delta >= 0 ? '+' : ''}{dailyTotals.delta.toFixed(0)}
+                                            {pctLabel(pct(dailyTotals.real, dailyTotals.meta))}
                                         </Td>
                                     </tr>
                                 </tbody>
@@ -1021,15 +1080,18 @@ function MachineDetailModal({ batchId, machine, day, viewType, onClose }: {
 
 // ========== COMPONENTES AUXILIARES ==========
 
-function Section({ title, color, subtitle, children, style }: { title: string; color: string; subtitle?: string; children: React.ReactNode; style?: React.CSSProperties }) {
+function Section({ title, color, subtitle, children, style, headerAction }: { title: string; color: string; subtitle?: string; children: React.ReactNode; style?: React.CSSProperties, headerAction?: React.ReactNode }) {
     return (
         <div style={style}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                <div style={{ width: '5px', height: '24px', background: color, borderRadius: '3px' }} />
-                <div>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#18181b' }}>{title}</div>
-                    {subtitle && <div style={{ fontSize: '12px', color: '#64748b' }}>{subtitle}</div>}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '5px', height: '24px', background: color, borderRadius: '3px' }} />
+                    <div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#18181b' }}>{title}</div>
+                        {subtitle && <div style={{ fontSize: '12px', color: '#64748b' }}>{subtitle}</div>}
+                    </div>
                 </div>
+                {headerAction}
             </div>
             <div style={{ borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
                 {children}
