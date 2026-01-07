@@ -412,7 +412,7 @@ export function ResultsPage() {
                 accReal: round2(accReal),
                 accDelta: round2(accReal - accTarget),
                 pctDay: pct(dayReal, dayTarget),
-                pctMonth: pct(accReal, monthTarget),
+                pctMonth: pct(accReal, accTarget),
             })
         }
 
@@ -452,7 +452,7 @@ export function ResultsPage() {
                 accReal,
                 accDelta: round2(accReal - accTarget),
                 pctDay: pct(dayReal, dayTarget),
-                pctMonth: pct(accReal, monthTarget),
+                pctMonth: pct(accReal, accTarget),
             })
         }
         groups.sort((a, b) => (a.sector?.sort_order ?? 0) - (b.sector?.sort_order ?? 0))
@@ -475,7 +475,7 @@ export function ResultsPage() {
             accReal,
             accDelta: round2(accReal - accTarget),
             pctDay: pct(dayReal, dayTarget),
-            pctMonth: pct(accReal, monthTarget),
+            pctMonth: pct(accReal, accTarget),
         }
     }, [machineMetrics])
 
@@ -766,10 +766,10 @@ export function ResultsPage() {
                         }
                     >
                         <div ref={resumoRef} style={{ overflowX: 'auto', background: '#fff' }}>
-                            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0', fontSize: '14px' }}>
+                            <table style={{ width: 'max-content', borderCollapse: 'separate', borderSpacing: '0', fontSize: '14px' }}>
                                 <thead>
                                     <tr>
-                                        <Th left width={100} style={{ background: '#1e3a5f', color: '#fff', borderBottom: 'none' }}>Dia</Th>
+                                        <Th left width={100} style={{ background: '#1e3a5f', color: '#fff', borderBottom: 'none', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' }}>Dia</Th>
                                         {visibleDailyTrack.map(d => {
                                             const isSelected = selectedDay === d.day
                                             return (
@@ -780,7 +780,8 @@ export function ResultsPage() {
                                                         cursor: 'pointer',
                                                         background: isSelected ? '#ffffff' : '#1e3a5f',
                                                         color: isSelected ? '#1e3a5f' : '#fff',
-                                                        borderBottom: isSelected ? 'none' : 'none'
+                                                        borderBottom: isSelected ? 'none' : 'none',
+                                                        position: 'relative'
                                                     }}
                                                 >
                                                     <div className="group relative flex flex-col items-center justify-center">
@@ -799,7 +800,8 @@ export function ResultsPage() {
                                                                 background: '#fff', border: '1px solid #e5e7eb', borderRadius: '50%',
                                                                 width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                                 cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                                                                color: '#64748b'
+                                                                color: '#64748b',
+                                                                zIndex: 10
                                                             }}
                                                             title="Ocultar dia"
                                                         >
@@ -812,62 +814,58 @@ export function ResultsPage() {
                                                 </Th>
                                             )
                                         })}
-                                        <Th accent width={80} style={{ borderBottom: 'none' }}>TOTAL</Th>
+                                        <Th width={80} style={{ borderBottom: 'none', background: '#1e3a5f', color: '#fff' }}>TOTAL</Th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {/* Linha META */}
                                     <tr>
-                                        <Td left label style={{ background: '#1e3a5f', color: '#fff', borderBottom: '1px solid #334155' }}>META</Td>
+                                        <Td left label style={{ background: '#f8fafc', color: '#475569', borderBottom: '1px solid #f1f5f9', borderRight: '1px solid #f1f5f9' }}>META</Td>
                                         {visibleDailyTrack.map(d => {
                                             const isSelected = selectedDay === d.day
                                             return (
                                                 <Td
                                                     key={d.day}
-                                                    muted
-                                                    style={{ background: isSelected ? '#eff6ff' : undefined }}
+                                                    style={{ background: isSelected ? '#eff6ff' : '#fff', borderBottom: '1px solid #f1f5f9' }}
                                                 >
                                                     {d.meta.toFixed(0)}
                                                 </Td>
                                             )
                                         })}
-                                        <Td accent bold>{dailyTotals.meta.toFixed(0)}</Td>
+                                        <Td bold style={{ background: '#fff', borderBottom: '1px solid #f1f5f9', borderLeft: '1px solid #f1f5f9', color: '#334155' }}>{dailyTotals.meta.toFixed(0)}</Td>
                                     </tr>
 
                                     {/* Linha REAL */}
                                     <tr>
-                                        <Td left label style={{ background: '#1e3a5f', color: '#fff', borderBottom: 'none' }}>REAL</Td>
+                                        <Td left label style={{ background: '#f8fafc', color: '#475569', borderBottom: '1px solid #f1f5f9', borderRight: '1px solid #f1f5f9' }}>REAL</Td>
                                         {visibleDailyTrack.map(d => {
                                             const isSelected = selectedDay === d.day
                                             return (
                                                 <Td
                                                     key={d.day}
                                                     bold
-                                                    style={{ background: isSelected ? '#eff6ff' : undefined }}
+                                                    style={{ background: isSelected ? '#eff6ff' : '#fff', borderBottom: '1px solid #f1f5f9' }}
                                                 >
                                                     {d.real.toFixed(0)}
                                                 </Td>
                                             )
                                         })}
-                                        <Td accent bold>{dailyTotals.real.toFixed(0)}</Td>
+                                        <Td bold style={{ background: '#fff', borderBottom: '1px solid #f1f5f9', borderLeft: '1px solid #f1f5f9', color: '#0f172a' }}>{dailyTotals.real.toFixed(0)}</Td>
                                     </tr>
 
                                     {/* Linha % ATINGIDO */}
                                     <tr>
-                                        <Td left label style={{ borderTop: 'none', background: '#1e3a5f', color: '#fff' }}>% ATING.</Td>
+                                        <Td left label style={{ borderTop: 'none', background: '#f8fafc', color: '#475569', borderRight: '1px solid #f1f5f9' }}>% ATING.</Td>
                                         {visibleDailyTrack.map(d => {
                                             const p = pct(d.real, d.meta)
                                             const isSelected = selectedDay === d.day
-                                            // Colors: On Dark bg -> Light Green/Red. On Light bg (selected) -> Normal Green/Red
                                             const isGood = (p ?? 0) >= 1
-                                            const color = isSelected
-                                                ? (isGood ? '#16a34a' : '#dc2626')
-                                                : (isGood ? '#86efac' : '#fca5a5')
+                                            const color = isGood ? '#16a34a' : '#dc2626'
 
                                             return (
                                                 <Td key={d.day} style={{
                                                     color, fontWeight: 700,
-                                                    background: isSelected ? '#fff' : '#1e3a5f',
+                                                    background: isSelected ? '#eff6ff' : '#fff',
                                                     borderTop: 'none',
                                                     borderBottom: 'none'
                                                 }}>
@@ -876,9 +874,10 @@ export function ResultsPage() {
                                             )
                                         })}
                                         <Td bold style={{
-                                            color: (pct(dailyTotals.real, dailyTotals.meta) ?? 0) >= 1 ? '#86efac' : '#fca5a5',
+                                            color: (pct(dailyTotals.real, dailyTotals.meta) ?? 0) >= 1 ? '#16a34a' : '#dc2626',
                                             borderTop: 'none',
-                                            background: '#1e3a5f'
+                                            borderLeft: '1px solid #f1f5f9',
+                                            background: '#fff'
                                         }}>
                                             {pctLabel(pct(dailyTotals.real, dailyTotals.meta))}
                                         </Td>
