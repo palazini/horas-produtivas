@@ -474,6 +474,7 @@ export function ResultsPage() {
             accTarget,
             accReal,
             accDelta: round2(accReal - accTarget),
+            pctDay: pct(dayReal, dayTarget),
             pctMonth: pct(accReal, monthTarget),
         }
     }, [machineMetrics])
@@ -745,7 +746,6 @@ export function ResultsPage() {
                     <Section
                         title="Ritmo Diário — Meta x Real"
                         color="#1e3a5f"
-                        subtitle={viewType === 'producao' ? 'Dias úteis + sábados trabalhados' : 'Dias úteis (sábado somado na sexta)'}
                         headerAction={
                             hiddenDays.length > 0 && (
                                 <button
@@ -907,6 +907,7 @@ export function ResultsPage() {
                                     <ThTable>Meta acum.</ThTable>
                                     <ThTable>Real acum.</ThTable>
                                     <ThTable>Δ acum.</ThTable>
+                                    <ThTable>% dia</ThTable>
                                     <ThTable>% mês</ThTable>
                                 </tr>
                             </thead>
@@ -933,6 +934,7 @@ export function ResultsPage() {
                                                 <TdTable bold>{hoursLabel(sec.accTarget)}</TdTable>
                                                 <TdTable bold>{hoursLabel(sec.accReal)}</TdTable>
                                                 <TdTable bold delta={sec.accDelta}>{hoursLabel(sec.accDelta)}</TdTable>
+                                                <TdTable bold pct={sec.pctDay}>{pctLabel(sec.pctDay)}</TdTable>
                                                 <TdTable bold pct={sec.pctMonth}>{pctLabel(sec.pctMonth)}</TdTable>
                                             </tr>
                                             {/* Máquinas */}
@@ -953,6 +955,7 @@ export function ResultsPage() {
                                                     <TdTable muted0={m.accTarget === 0}>{hoursLabel(m.accTarget)}</TdTable>
                                                     <TdTable muted0={m.accReal === 0}>{hoursLabel(m.accReal)}</TdTable>
                                                     <TdTable delta={m.accDelta}>{hoursLabel(m.accDelta)}</TdTable>
+                                                    <TdTable pct={m.pctDay}>{pctLabel(m.pctDay)}</TdTable>
                                                     <TdTable pct={m.pctMonth}>{pctLabel(m.pctMonth)}</TdTable>
                                                 </tr>
                                             ))}
@@ -972,6 +975,9 @@ export function ResultsPage() {
                                     <TdTable bold style={{ color: '#fff', fontSize: '17px', padding: '10px 6px' }}>{hoursLabel(totalGeral.accReal)}</TdTable>
                                     <TdTable bold style={{ color: totalGeral.accDelta < 0 ? '#fca5a5' : totalGeral.accDelta > 0 ? '#86efac' : '#fff', fontSize: '17px', padding: '10px 6px' }}>
                                         {hoursLabel(totalGeral.accDelta)}
+                                    </TdTable>
+                                    <TdTable bold style={{ color: (totalGeral.pctDay ?? 0) >= 1 ? '#86efac' : '#fca5a5', fontSize: '18px', padding: '10px 6px' }}>
+                                        {pctLabel(totalGeral.pctDay)}
                                     </TdTable>
                                     <TdTable bold style={{ color: (totalGeral.pctMonth ?? 0) >= 1 ? '#86efac' : '#fff', fontSize: '18px', padding: '10px 6px' }}>
                                         {pctLabel(totalGeral.pctMonth)}
