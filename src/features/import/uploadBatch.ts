@@ -20,6 +20,36 @@ export async function uploadAndProcessBatch(input: {
   yearMonth?: string
 }): Promise<UploadOutcome> {
   try {
+    // 0) Extrai os dias únicos do arquivo para deletar dados antigos
+    const uniqueDays = [...new Set(input.rows.map(r => r.prod_day))]
+
+    if (uniqueDays.length > 0 && input.yearMonth) {
+      // Buscar batches existentes do mesmo mês
+      const { data: existingBatches } = await supabase
+        .from('production_batches')
+        .select('id')
+        .eq('year_month', input.yearMonth)
+        .eq('status', 'ready')
+
+      if (existingBatches?.length) {
+        const existingBatchIds = existingBatches.map(b => b.id)
+
+        // Deletar dados consolidados antigos desses dias específicos
+        await supabase
+          .from('daily_machine_hours')
+          .delete()
+          .in('batch_id', existingBatchIds)
+          .in('prod_day', uniqueDays)
+
+        // Deletar linhas brutas antigas desses dias
+        await supabase
+          .from('production_rows')
+          .delete()
+          .in('batch_id', existingBatchIds)
+          .in('prod_day', uniqueDays)
+      }
+    }
+
     // 1) cria batch
     const { data: batch, error: e1 } = await supabase
       .from('production_batches')

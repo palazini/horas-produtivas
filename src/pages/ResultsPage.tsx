@@ -2,10 +2,10 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import { toPng } from 'html-to-image'
 import {
-    fetchDailyHoursForBatch,
     fetchLatestReadyBatch,
     fetchMachinesAll,
-    fetchReadyBatchForMonth,
+    fetchAllReadyBatchesForMonth,
+    fetchDailyHoursForMonth,
     fetchTargetsDaily,
     fetchTargetsDefaults,
     fetchRawRowsForMachine,
@@ -95,7 +95,7 @@ export function ResultsPage() {
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState<string | null>(null)
 
-    const [batchId, setBatchId] = useState<string | null>(null)
+    const [batchIds, setBatchIds] = useState<string[]>([])
     const [refDate, setRefDate] = useState<string | null>(null)
     const [monthStart, setMonthStart] = useState<string | null>(null)
 
@@ -126,13 +126,35 @@ export function ResultsPage() {
         setBusy(true)
         setErr(null)
         try {
-            // Fetch batch based on whether a specific month is selected
-            const batch = targetMonth
-                ? await fetchReadyBatchForMonth(targetMonth)
-                : await fetchLatestReadyBatch()
+            // Determinar o mês a ser buscado
+            let yearMonth: string
+            let latestRefDate: string | null = null
 
-            if (!batch) {
-                setBatchId(null)
+            if (targetMonth) {
+                yearMonth = targetMonth
+            } else {
+                // Buscar o batch mais recente para descobrir o mês
+                const latestBatch = await fetchLatestReadyBatch()
+                if (!latestBatch || !latestBatch.year_month) {
+                    setBatchIds([])
+                    setRefDate(null)
+                    setMonthStart(null)
+                    setMachines([])
+                    setDailyRows([])
+                    setHiddenDays([])
+                    setTargetsDefaults([])
+                    setTargetsDaily({})
+                    return
+                }
+                yearMonth = latestBatch.year_month
+                latestRefDate = latestBatch.ref_date
+            }
+
+            // Buscar TODOS os batches ready do mês
+            const batches = await fetchAllReadyBatchesForMonth(yearMonth)
+
+            if (!batches.length) {
+                setBatchIds([])
                 setRefDate(null)
                 setMonthStart(null)
                 setMachines([])
@@ -146,22 +168,25 @@ export function ResultsPage() {
                 return
             }
 
-            const ref = batch.ref_date
-            const month = batch.year_month
-            if (!ref || !month) throw new Error('Batch pronto sem ref_date/year_month.')
+            // Usar a maior ref_date entre todos os batches
+            const allRefDates = batches.map(b => b.ref_date).filter(Boolean) as string[]
+            const maxRefDate = allRefDates.sort().pop() ?? latestRefDate
 
-            const ms = dayjs(month).startOf('month')
-            const me = dayjs(month).endOf('month')
+            if (!maxRefDate) throw new Error('Batch pronto sem ref_date.')
 
-            setBatchId(batch.id)
-            setRefDate(ref)
+            const ms = dayjs(yearMonth).startOf('month')
+            const me = dayjs(yearMonth).endOf('month')
+
+            setBatchIds(batches.map(b => b.id))
+            setRefDate(maxRefDate)
             setMonthStart(ymd(ms))
             setSelectedDay(null) // Reset day selection when loading new month
             setHiddenDays([])
 
+            // Buscar dados consolidados de TODOS os batches do mês
             const [allMachines, monthDaily, tDef, td] = await Promise.all([
                 fetchMachinesAll(),
-                fetchDailyHoursForBatch(batch.id, ymd(ms), ymd(me)),
+                fetchDailyHoursForMonth(yearMonth, ymd(ms), ymd(me)),
                 fetchTargetsDefaults(ymd(ms)),
                 fetchTargetsDaily(ymd(ms), ymd(me)),
             ])
@@ -493,7 +518,7 @@ export function ResultsPage() {
     }
 
     // Estado vazio
-    if (!busy && !batchId) {
+    if (!busy && !batchIds.length) {
         return (
             <div className="card">
                 <div className="card-body py-12 text-center">
@@ -958,9 +983,9 @@ export function ResultsPage() {
                 </Section>
             </div>
             {/* MODAL DETALHE MÁQUINA */}
-            {selectedMachine && batchId && (
+            {selectedMachine && batchIds.length > 0 && (
                 <MachineDetailModal
-                    batchId={batchId}
+                    batchIds={batchIds}
                     machine={selectedMachine}
                     day={selectedDay ?? refDate ?? ''}
                     viewType={viewType}
@@ -971,8 +996,8 @@ export function ResultsPage() {
     )
 }
 
-function MachineDetailModal({ batchId, machine, day, viewType, onClose }: {
-    batchId: string,
+function MachineDetailModal({ batchIds, machine, day, viewType, onClose }: {
+    batchIds: string[],
     machine: MachineRow,
     day: string,
     viewType: ViewType,
@@ -991,7 +1016,7 @@ function MachineDetailModal({ batchId, machine, day, viewType, onClose }: {
                     // Sexta contábil inclui sábado
                     targetDays.push(ymd(dayjs(day).add(1, 'day')))
                 }
-                const res = await fetchRawRowsForMachine(batchId, machine.id, targetDays)
+                const res = await fetchRawRowsForMachine(batchIds, machine.id, targetDays)
                 if (active) setRows(res)
             } catch (err) {
                 console.error(err)
@@ -1001,7 +1026,7 @@ function MachineDetailModal({ batchId, machine, day, viewType, onClose }: {
         }
         fetch()
         return () => { active = false }
-    }, [batchId, machine.id, day, viewType])
+    }, [batchIds, machine.id, day, viewType])
 
     const total = rows.reduce((acc, r) => acc + Number(r.hours ?? 0), 0)
 

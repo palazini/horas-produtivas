@@ -110,13 +110,65 @@ export type RawProductionRow = {
   hours: number
 }
 
-export async function fetchRawRowsForMachine(batchId: string, machineId: string, days: string[]) {
+// Busca TODOS os batches ready de um mês (para consolidar dados de múltiplos uploads)
+export async function fetchAllReadyBatchesForMonth(yearMonth: string) {
+  const { data, error } = await supabase
+    .from('production_batches')
+    .select('*')
+    .eq('status', 'ready')
+    .eq('year_month', yearMonth)
+    .order('ref_date', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as ReadyBatch[]
+}
+
+// Busca horas consolidadas SEM filtrar por batch - junta dados de todos os batches ready do mês
+export async function fetchDailyHoursForMonth(yearMonth: string, dateFrom: string, dateTo: string) {
+  // Primeiro busca todos os batch IDs ready para este mês
+  const { data: batches, error: batchError } = await supabase
+    .from('production_batches')
+    .select('id')
+    .eq('status', 'ready')
+    .eq('year_month', yearMonth)
+
+  if (batchError) throw batchError
+  if (!batches?.length) return []
+
+  const batchIds = batches.map(b => b.id)
+
+  const { data, error } = await supabase
+    .from('daily_machine_hours')
+    .select(
+      'id,prod_day,hours,batch_id,machine:machines(id,sector_id,code,name_display,is_active,sort_order,sector:sectors(id,name,sort_order))'
+    )
+    .in('batch_id', batchIds)
+    .gte('prod_day', dateFrom)
+    .lte('prod_day', dateTo)
+
+  if (error) throw error
+
+  return (data ?? []).map((row) => {
+    const machineRaw = Array.isArray(row.machine) ? row.machine[0] : row.machine
+    return {
+      ...row,
+      machine: machineRaw ? {
+        ...machineRaw,
+        sector: Array.isArray(machineRaw.sector) ? machineRaw.sector[0] : machineRaw.sector,
+      } : machineRaw,
+    }
+  }) as (DailyHourRow & { batch_id: string })[]
+}
+
+export async function fetchRawRowsForMachine(batchIds: string | string[], machineId: string, days: string[]) {
   if (!days.length) return []
+
+  const ids = Array.isArray(batchIds) ? batchIds : [batchIds]
 
   const { data, error } = await supabase
     .from('production_rows')
     .select('id, prod_day, machine_raw, hours')
-    .eq('batch_id', batchId)
+    .in('batch_id', ids)
     .eq('machine_id', machineId)
     .in('prod_day', days)
     .order('prod_day', { ascending: true })

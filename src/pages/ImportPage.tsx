@@ -1,8 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { DragEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import dayjs from 'dayjs'
 import { parseWipXlsx, type ParseResult } from '../features/import/parseWipXlsx'
 import { uploadAndProcessBatch, setActiveBatchId } from '../features/import/uploadBatch'
+import { supabase } from '../lib/supabaseClient'
+
+type ActiveBatchInfo = {
+  id: string
+  ref_date: string | null
+  created_at: string
+  row_count: number | null
+}
 
 export function ImportPage() {
   const nav = useNavigate()
@@ -17,6 +26,25 @@ export function ImportPage() {
 
   // força reset do input pra permitir escolher o mesmo arquivo novamente
   const [inputKey, setInputKey] = useState(0)
+
+  // Batches ativos do mês atual
+  const [activeBatches, setActiveBatches] = useState<ActiveBatchInfo[]>([])
+
+  // Carregar batches ativos ao montar
+  useEffect(() => {
+    async function loadActiveBatches() {
+      const currentMonth = dayjs().startOf('month').format('YYYY-MM-DD')
+      const { data } = await supabase
+        .from('production_batches')
+        .select('id, ref_date, created_at, row_count')
+        .eq('status', 'ready')
+        .eq('year_month', currentMonth)
+        .order('ref_date', { ascending: true })
+
+      setActiveBatches(data ?? [])
+    }
+    loadActiveBatches()
+  }, [])
 
   const summary = useMemo(() => {
     if (!parsed) return null
@@ -304,6 +332,63 @@ export function ImportPage() {
 
       {/* Info Card (pode manter igual ao seu) */}
       {/* ... */}
+
+      {/* Arquivos de Referência Ativos */}
+      {activeBatches.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <div className="flex items-center gap-3">
+              <div className="icon-box" style={{ background: '#dbeafe' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" x2="8" y1="13" y2="13" />
+                  <line x1="16" x2="8" y1="17" y2="17" />
+                  <line x1="10" x2="8" y1="9" y2="9" />
+                </svg>
+              </div>
+              <div>
+                <div className="font-semibold text-sm" style={{ color: 'var(--color-text-primary)' }}>
+                  Arquivos de Referência Ativos ({dayjs().format('MMMM YYYY')})
+                </div>
+                <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                  Dados de produção já importados para este mês
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="card-body">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+              {activeBatches.map(b => (
+                <div
+                  key={b.id}
+                  style={{
+                    background: 'var(--color-surface-1)',
+                    border: '1px solid var(--color-border-light)',
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    minWidth: '140px',
+                    textAlign: 'center'
+                  }}
+                >
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e3a5f' }}>
+                    {b.ref_date ? dayjs(b.ref_date).format('DD/MM') : '-'}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
+                    {b.row_count ?? 0} linhas
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
+                    {dayjs(b.created_at).format('DD/MM HH:mm')}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
+              💡 Ao reimportar um dia já existente, os dados antigos serão substituídos automaticamente.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
