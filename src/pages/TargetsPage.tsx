@@ -453,7 +453,7 @@ export function TargetsPage() {
                             <polyline points="7 10 12 15 17 10" />
                             <line x1="12" x2="12" y1="15" y2="3" />
                         </svg>
-                        Importar
+                        Importar Metas
                     </button>
                 </div>
             </div>

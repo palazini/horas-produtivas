@@ -107,7 +107,7 @@ export function ResultsPage() {
     const [targetsDefaults, setTargetsDefaults] = useState<TargetDefault[]>([])
     const [targetsDaily, setTargetsDaily] = useState<Record<string, Record<string, number>>>({})
 
-    const resumoRef = useRef<HTMLDivElement | null>(null)
+    const resumoRef = useRef<HTMLTableElement | null>(null)
     const detalheRef = useRef<HTMLDivElement | null>(null)
 
     const [expandedSectors, setExpandedSectors] = useState<Record<string, boolean>>({})
@@ -765,8 +765,8 @@ export function ResultsPage() {
                             )
                         }
                     >
-                        <div ref={resumoRef} style={{ overflowX: 'auto', background: '#fff' }}>
-                            <table style={{ width: 'max-content', borderCollapse: 'separate', borderSpacing: '0', fontSize: '14px' }}>
+                        <div style={{ overflowX: 'auto', background: '#fff' }}>
+                            <table ref={resumoRef} style={{ width: 'max-content', borderCollapse: 'separate', borderSpacing: '0', fontSize: '14px' }}>
                                 <thead>
                                     <tr>
                                         <Th left width={100} style={{ background: '#1e3a5f', color: '#fff', borderBottom: 'none', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' }}>Dia</Th>
