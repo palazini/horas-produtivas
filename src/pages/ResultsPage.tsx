@@ -113,7 +113,7 @@ export function ResultsPage() {
     const [expandedSectors, setExpandedSectors] = useState<Record<string, boolean>>({})
 
     // NOVO: Switcher Produção / Contabilidade
-    const [viewType, setViewType] = useState<ViewType>('producao')
+    const [viewType, setViewType] = useState<ViewType>('contabilidade')
 
     // Selected day for detail view (null means use refDate)
     const [selectedDay, setSelectedDay] = useState<string | null>(null)
