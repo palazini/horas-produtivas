@@ -51,8 +51,11 @@ function pct(n: number, d: number) {
     return n / d
 }
 
-function pctLabel(p: number | null) {
+function pctLabel(p: number | null, decimals: number = 0) {
     if (p == null) return '—'
+    if (decimals > 0) {
+        return `${(p * 100).toFixed(decimals)}%`
+    }
     return `${Math.round(p * 100)}%`
 }
 
@@ -933,8 +936,8 @@ export function ResultsPage() {
                                                 <TdTable bold>{hoursLabel(sec.accTarget)}</TdTable>
                                                 <TdTable bold>{hoursLabel(sec.accReal)}</TdTable>
                                                 <TdTable bold delta={sec.accDelta}>{hoursLabel(sec.accDelta)}</TdTable>
-                                                <TdTable bold pct={sec.pctDay}>{pctLabel(sec.pctDay)}</TdTable>
-                                                <TdTable bold pct={sec.pctMonth}>{pctLabel(sec.pctMonth)}</TdTable>
+                                                <TdTable bold pct={sec.pctDay}>{pctLabel(sec.pctDay, 1)}</TdTable>
+                                                <TdTable bold pct={sec.pctMonth}>{pctLabel(sec.pctMonth, 1)}</TdTable>
                                             </tr>
                                             {/* Máquinas */}
                                             {open && ms.map(m => (
@@ -954,8 +957,8 @@ export function ResultsPage() {
                                                     <TdTable muted0={m.accTarget === 0}>{hoursLabel(m.accTarget)}</TdTable>
                                                     <TdTable muted0={m.accReal === 0}>{hoursLabel(m.accReal)}</TdTable>
                                                     <TdTable delta={m.accDelta}>{hoursLabel(m.accDelta)}</TdTable>
-                                                    <TdTable pct={m.pctDay}>{pctLabel(m.pctDay)}</TdTable>
-                                                    <TdTable pct={m.pctMonth}>{pctLabel(m.pctMonth)}</TdTable>
+                                                    <TdTable pct={m.pctDay}>{pctLabel(m.pctDay, 1)}</TdTable>
+                                                    <TdTable pct={m.pctMonth}>{pctLabel(m.pctMonth, 1)}</TdTable>
                                                 </tr>
                                             ))}
                                         </Fragment>
@@ -976,10 +979,10 @@ export function ResultsPage() {
                                         {hoursLabel(totalGeral.accDelta)}
                                     </TdTable>
                                     <TdTable bold style={{ color: (totalGeral.pctDay ?? 0) >= 1 ? '#86efac' : '#fca5a5', fontSize: '18px', padding: '10px 6px' }}>
-                                        {pctLabel(totalGeral.pctDay)}
+                                        {pctLabel(totalGeral.pctDay, 1)}
                                     </TdTable>
                                     <TdTable bold style={{ color: (totalGeral.pctMonth ?? 0) >= 1 ? '#86efac' : '#fff', fontSize: '18px', padding: '10px 6px' }}>
-                                        {pctLabel(totalGeral.pctMonth)}
+                                        {pctLabel(totalGeral.pctMonth, 1)}
                                     </TdTable>
                                 </tr>
                             </tbody>
