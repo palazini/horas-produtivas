@@ -320,6 +320,7 @@ export function ResultsPage() {
             return relevantDays.map(d => {
                 let meta = 0, real = 0
                 for (const m of machines) {
+                    if (!m.is_active) continue
                     meta += Number(effectiveTargetByMachineDay[m.id]?.[d] ?? 0)
                     real += Number(realByMachineDay[m.id]?.[d] ?? 0)
                 }
@@ -341,6 +342,7 @@ export function ResultsPage() {
                 const dayD = dayjs(d)
 
                 for (const m of machines) {
+                    if (!m.is_active) continue
                     meta += Number(effectiveTargetByMachineDay[m.id]?.[d] ?? 0)
                     real += Number(realByMachineDay[m.id]?.[d] ?? 0)
 
