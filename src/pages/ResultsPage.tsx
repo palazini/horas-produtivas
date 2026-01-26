@@ -300,7 +300,7 @@ export function ResultsPage() {
     // Se target === key, o dia é exibido. Se target !== key, o dia é oculto e somado ao target.
     const dayMergeMap = useMemo(() => {
         const map: Record<string, string> = {}
-        const THRESHOLD = 9
+        const THRESHOLD = 10
 
         for (const d of dayList) {
             const dayD = dayjs(d)
@@ -359,6 +359,19 @@ export function ResultsPage() {
         if (!refDate) return null
         return dayMergeMap[refDate] ?? refDate
     }, [refDate, dayMergeMap])
+
+    // Dados para o modal de detalhe (Moved up to avoid conditional hook call error)
+    const modalDays = useMemo(() => {
+        const raw = selectedDay ?? refDate ?? ''
+        const target = dayMergeMap[raw] ?? raw
+        return dayList.filter(d => dayMergeMap[d] === target)
+    }, [selectedDay, refDate, dayMergeMap, dayList])
+
+    const modalDayDesc = useMemo(() => {
+        const raw = selectedDay ?? refDate ?? ''
+        const target = dayMergeMap[raw] ?? raw
+        return dayjs(target).format('DD/MM')
+    }, [selectedDay, refDate, dayMergeMap])
 
     // Dados diários consolidados
     const dailyTrack = useMemo(() => {
@@ -571,6 +584,18 @@ export function ResultsPage() {
         delta: dailyTrack.reduce((a, x) => a + x.delta, 0),
     }), [dailyTrack])
 
+    // Label adicional se houver merge
+    const saturdayMergedInfo = useMemo(() => {
+        if (!refDate || !dayMergeMap) return null
+        // Check if effectiveRefDate (which is what we show) includes other days
+        const target = dayMergeMap[refDate] ?? refDate
+        const merged = dayList.filter(d => dayMergeMap[d] === target && d !== target)
+        if (merged.length > 0) {
+            return `(Inclui: ${merged.map(d => fmtDayBR(d)).join(', ')})`
+        }
+        return null
+    }, [refDate, dayMergeMap, dayList])
+
     async function exportResumo() {
         if (!resumoRef.current) return
         setBusy(true)
@@ -619,17 +644,7 @@ export function ResultsPage() {
     const monthTitle = monthStart && effectiveRefDate ? `Produção — ${fmtMonthBR(monthStart)}` : 'Resultados'
     const displayRefDate = effectiveRefDate ?? refDate
 
-    // Label adicional se houver merge
-    const saturdayMergedInfo = useMemo(() => {
-        if (!refDate || !dayMergeMap) return null
-        // Check if effectiveRefDate (which is what we show) includes other days
-        const target = dayMergeMap[refDate] ?? refDate
-        const merged = dayList.filter(d => dayMergeMap[d] === target && d !== target)
-        if (merged.length > 0) {
-            return `(Inclui: ${merged.map(d => fmtDayBR(d)).join(', ')})`
-        }
-        return null
-    }, [refDate, dayMergeMap, dayList])
+
 
     function handleDayClick(dayIso: string) {
         if (selectedDay === dayIso) {
@@ -644,9 +659,11 @@ export function ResultsPage() {
         ? `Produção Detalhada — ${dayjs(selectedDay).format('DD/MM/YYYY')}` + (dayjs(selectedDay).day() === 6 ? ' (Sábado)' : '')
         : 'Produção por Setor / Máquina (Acumulado Mês)'
 
+
+
     return (
         <div className="space-y-6">
-            {/* Header com ações */}
+            {/* ... logic ... */}
             <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
                     {/* Month Navigation */}
@@ -1084,19 +1101,8 @@ export function ResultsPage() {
                 <MachineDetailModal
                     batchIds={batchIds}
                     machine={selectedMachine}
-                    days={(() => {
-                        const raw = selectedDay ?? refDate ?? ''
-                        const target = dayMergeMap[raw] ?? raw
-                        // Encontrar todos os dias que mergeiam neste target
-                        const merged = dayList.filter(d => dayMergeMap[d] === target)
-                        return merged
-                    })()}
-                    // dayDesc is for display
-                    dayDesc={(() => {
-                        const raw = selectedDay ?? refDate ?? ''
-                        const target = dayMergeMap[raw] ?? raw
-                        return dayjs(target).format('DD/MM')
-                    })()}
+                    days={modalDays}
+                    dayDesc={modalDayDesc}
                     viewType={viewType}
                     onClose={() => setSelectedMachine(null)}
                 />
