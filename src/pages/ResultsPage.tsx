@@ -22,9 +22,7 @@ function isBusinessDay(d: dayjs.Dayjs) {
     return wd >= 1 && wd <= 5
 }
 
-function isSaturday(d: dayjs.Dayjs) {
-    return d.day() === 6
-}
+
 
 function ymd(d: dayjs.Dayjs) {
     return d.format('YYYY-MM-DD')
@@ -64,15 +62,7 @@ function hoursLabel(n: number) {
     return v.toFixed(2)
 }
 
-// Retorna a sexta-feira anterior a uma data (ou a própria data se for sexta)
-function getPreviousFriday(d: dayjs.Dayjs): dayjs.Dayjs {
-    const wd = d.day()
-    if (wd === 5) return d // já é sexta
-    if (wd === 6) return d.subtract(1, 'day') // sábado -> sexta
-    // Para outros dias (seg-qui, dom), vai para a sexta anterior
-    const diff = (wd + 2) % 7
-    return d.subtract(diff, 'day')
-}
+
 
 type MachineMetrics = {
     machine: MachineRow
@@ -291,15 +281,84 @@ export function ResultsPage() {
         return set
     }, [dailyRows])
 
-    // Data de referência efetiva (para contabilidade, sábado vira sexta)
+    // Total Real consolidado por dia (soma de todas as máquinas) para decisão de merge
+    const totalRealByDay = useMemo(() => {
+        const map: Record<string, number> = {}
+        for (const d of dayList) {
+            let sum = 0
+            for (const m of machines) {
+                if (!m.is_active) continue
+                sum += Number(realByMachineDay[m.id]?.[d] ?? 0)
+            }
+            map[d] = sum
+        }
+        return map
+    }, [dayList, machines, realByMachineDay])
+
+    // Mapa de visibilidade e merges
+    // Key: dia original. Value: dia de destino (onde será exibido).
+    // Se target === key, o dia é exibido. Se target !== key, o dia é oculto e somado ao target.
+    const dayMergeMap = useMemo(() => {
+        const map: Record<string, string> = {}
+        const THRESHOLD = 9
+
+        for (const d of dayList) {
+            const dayD = dayjs(d)
+            const wd = dayD.day()
+
+            // Default: map to itself
+            if (!map[d]) map[d] = d
+
+            if (viewType === 'producao') {
+                // Produção: sem merges complexos, apenas verificar se tem produção para exibir (logica filtered depois)
+                // Mantemos identidade
+                continue
+            }
+
+            // CONTABILIDADE Logic
+            if (wd === 5) { // Sexta
+                // Olhar Sábado seguinte
+                const sat = ymd(dayD.add(1, 'day'))
+                if (dayList.includes(sat)) {
+                    const satTotal = totalRealByDay[sat] ?? 0
+
+                    if (satTotal < THRESHOLD) {
+                        // Sábado < 9h -> Merge na Sexta
+                        map[sat] = d
+
+                        // Validar Domingo também
+                        const sun = ymd(dayD.add(2, 'day'))
+                        if (dayList.includes(sun)) {
+                            // Se Sábado foi mergeado, Domingo TAMBÉM vai para Sexta (User Rule Case 4)
+                            map[sun] = d
+                        }
+                    } else {
+                        // Sábado >= 9h -> Sábado fica separado (map[sat] já é sat)
+
+                        // Checar Domingo agora
+                        const sun = ymd(dayD.add(2, 'day'))
+                        if (dayList.includes(sun)) {
+                            const sunTotal = totalRealByDay[sun] ?? 0
+                            if (sunTotal < THRESHOLD) {
+                                // Domingo < 9h -> Merge no Sábado
+                                map[sun] = sat
+                            } else {
+                                // Domingo >= 9h -> Domingo separado
+                                map[sun] = sun
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return map
+    }, [dayList, totalRealByDay, viewType])
+
+    // Data de referência efetiva
     const effectiveRefDate = useMemo(() => {
         if (!refDate) return null
-        const refD = dayjs(refDate)
-        if (viewType === 'contabilidade' && isSaturday(refD)) {
-            return ymd(getPreviousFriday(refD))
-        }
-        return refDate
-    }, [refDate, viewType])
+        return dayMergeMap[refDate] ?? refDate
+    }, [refDate, dayMergeMap])
 
     // Dados diários consolidados
     const dailyTrack = useMemo(() => {
@@ -307,13 +366,12 @@ export function ResultsPage() {
         const refD = dayjs(refDate)
 
         if (viewType === 'producao') {
-            // MODO PRODUÇÃO: mostra sábados e domingos com produção
             const relevantDays = dayList.filter(d => {
                 if (!isSameOrBeforeDay(dayjs(d), refD)) return false
                 const wd = dayjs(d).day()
-                if (wd >= 1 && wd <= 5) return true // dias úteis sempre
-                if (wd === 6) return dayHasProduction.has(d) // sábado só com produção
-                if (wd === 0) return dayHasProduction.has(d) // domingo só com produção
+                if (wd >= 1 && wd <= 5) return true
+                if (wd === 6) return dayHasProduction.has(d)
+                if (wd === 0) return dayHasProduction.has(d)
                 return false
             })
 
@@ -325,60 +383,86 @@ export function ResultsPage() {
                     real += Number(realByMachineDay[m.id]?.[d] ?? 0)
                 }
                 const wd = dayjs(d).day()
-                const isSat = wd === 6
-                const isSun = wd === 0
-                return { day: d, meta: round2(meta), real: round2(real), delta: round2(real - meta), isSaturday: isSat, isSunday: isSun }
+                return { day: d, meta: round2(meta), real: round2(real), delta: round2(real - meta), isSaturday: wd === 6, isSunday: wd === 0 }
             })
         } else {
-            // MODO CONTABILIDADE: soma sábado e domingo na sexta, não mostra fim de semana separado
-            const relevantDays = dayList.filter(d => {
-                if (!isSameOrBeforeDay(dayjs(d), refD)) return false
-                const wd = dayjs(d).day()
-                return wd >= 1 && wd <= 5 // apenas dias úteis
+            // MODO CONTABILIDADE COM MERGE DINÂMICO
+            // 1. Identificar dias visíveis (target == key)
+            const visibleDays = dayList.filter(d => {
+                // Filtra futuro em relação a refDate
+                // Se um dia futuro foi mergeado em um passado visível, ele entra na soma do passado? Sim.
+                // Mas aqui listamos as COLUNAS. A coluna ReferenceDate deve ser visível?
+                // Se refDate for um dia merged (ex: Sab mergeado), effectiveRefDate é Sexta.
+                // Então paramos de listar em effectiveRefDate.
+
+                if (dayMergeMap[d] !== d) return false // É um dia mergeado, não gera coluna
+
+                // Se for depois da data de corte, não mostra (mas cuidado com merges parciais, assumimos corte limpo por 'batch')
+                // Usamos effectiveRefDate para limitar
+                const effRef = dayMergeMap[refDate]
+                return isSameOrBeforeDay(dayjs(d), dayjs(effRef))
             })
 
-            return relevantDays.map(d => {
+            return visibleDays.map(d => {
+                // Para cada dia visível, somar ele mesmo e todos que mapeiam para ele
+                const mergedSourceDays = dayList.filter(src => dayMergeMap[src] === d)
+
                 let meta = 0, real = 0
-                const dayD = dayjs(d)
+                let hasSat = false
+                let hasSun = false
 
-                for (const m of machines) {
-                    if (!m.is_active) continue
-                    meta += Number(effectiveTargetByMachineDay[m.id]?.[d] ?? 0)
-                    real += Number(realByMachineDay[m.id]?.[d] ?? 0)
+                for (const src of mergedSourceDays) {
+                    // Só soma se estiver dentro do range total permitido (logicamente deve estar se dayList vem de monthStart->monthEnd)
+                    const wd = dayjs(src).day()
+                    if (wd === 6) hasSat = true
+                    if (wd === 0) hasSun = true
 
-                    // Se for sexta-feira, soma o sábado e domingo seguintes
-                    if (dayD.day() === 5) {
-                        const saturday = ymd(dayD.add(1, 'day'))
-                        const sunday = ymd(dayD.add(2, 'day'))
-                        if (isSameOrBeforeDay(dayjs(saturday), refD)) {
-                            real += Number(realByMachineDay[m.id]?.[saturday] ?? 0)
-                        }
-                        if (isSameOrBeforeDay(dayjs(sunday), refD)) {
-                            real += Number(realByMachineDay[m.id]?.[sunday] ?? 0)
-                        }
+                    for (const m of machines) {
+                        if (!m.is_active) continue
+                        meta += Number(effectiveTargetByMachineDay[m.id]?.[src] ?? 0)
+                        real += Number(realByMachineDay[m.id]?.[src] ?? 0)
                     }
                 }
 
-                return { day: d, meta: round2(meta), real: round2(real), delta: round2(real - meta), isSaturday: false, isSunday: false }
+                return {
+                    day: d,
+                    meta: round2(meta),
+                    real: round2(real),
+                    delta: round2(real - meta),
+                    isSaturday: hasSat && d === dayjs(d).day(6).format('YYYY-MM-DD'), // Só marca flag se o próprio dia for sabado e visivel? Ou se contem sabado? Visualmente melhor marcar se for dia atipico.
+                    // Ajuste visual: Se d é Sexta e contem sabado, mostra normal. Se d é Sabado, mostra flag Sab.
+                    isSunday: hasSun && d === dayjs(d).day(0).format('YYYY-MM-DD')
+                }
             })
         }
-    }, [dayList, dayHasProduction, effectiveTargetByMachineDay, machines, realByMachineDay, refDate, viewType])
+    }, [dayList, dayHasProduction, effectiveTargetByMachineDay, machines, realByMachineDay, refDate, viewType, dayMergeMap])
 
     const visibleDailyTrack = dailyTrack.filter(d => !hiddenDays.includes(d.day))
 
     const machineMetrics = useMemo(() => {
         if (!refDate || !monthStart) return [] as MachineMetrics[]
 
-        // Use selectedDay if set, otherwise fall back to refDate
-        const activeDay = selectedDay ?? refDate
-
-        // Para "dia", usa activeDay; para acumulado, sempre inclui tudo até activeDay
+        // Active day logic
+        const rawSelected = selectedDay ?? refDate
+        // Se selecionou um dia que está mergeado em outro, a visualização efetiva é do alvo
+        const activeDay = dayMergeMap[rawSelected] ?? rawSelected
         const activeDayD = dayjs(activeDay)
-        const refIso = viewType === 'contabilidade' && isSaturday(activeDayD)
-            ? ymd(getPreviousFriday(activeDayD))
-            : activeDay
-        const accDays = dayList.filter(d => isSameOrBeforeDay(dayjs(d), activeDayD))
+
+        // Dias acumulados: todos que o targetDay <= activeDay
+        // CUIDADO: se activeDay é uma Sexta que contém Sábado, o acumulado inclui Sábado?
+        // Sim, se estamos vendo a "coluna Sexta", e ela contém o valor de Sábado, o acumulado até ali inclui Sábado.
+        // A lógica de acumulado deve ser: somar todos os dias originais (src) cujo target (dayMergeMap[src]) <= activeDay
+
         const rows: MachineMetrics[] = []
+
+        // Performance optimization: Pre-calculate relevant source days for accumulators
+        const relevantSourceDaysForAcc = dayList.filter(src => {
+            const target = dayMergeMap[src]
+            return isSameOrBeforeDay(dayjs(target), activeDayD)
+        })
+
+        // Identify source days for the specific "Day" column
+        const relevantSourceDaysForDay = dayList.filter(src => dayMergeMap[src] === activeDay)
 
         for (const m of machines) {
             if (!m.is_active) continue
@@ -387,24 +471,20 @@ export function ResultsPage() {
             let monthTarget = 0
             for (const d of dayList) monthTarget += Number(effectiveTargetByMachineDay[mid]?.[d] ?? 0)
 
-            // Day target e real
+            // Day Calculation
             let dayTarget = 0
             let dayReal = 0
-
-            if (viewType === 'contabilidade' && isSaturday(activeDayD)) {
-                // Sábado: combina sexta + sábado
-                const fridayIso = ymd(getPreviousFriday(activeDayD))
-                dayTarget = Number(effectiveTargetByMachineDay[mid]?.[fridayIso] ?? 0)
-                dayReal = Number(realByMachineDay[mid]?.[fridayIso] ?? 0) + Number(realByMachineDay[mid]?.[activeDay] ?? 0)
-            } else {
-                dayTarget = Number(effectiveTargetByMachineDay[mid]?.[refIso] ?? 0)
-                dayReal = Number(realByMachineDay[mid]?.[refIso] ?? 0)
+            for (const src of relevantSourceDaysForDay) {
+                dayTarget += Number(effectiveTargetByMachineDay[mid]?.[src] ?? 0)
+                dayReal += Number(realByMachineDay[mid]?.[src] ?? 0)
             }
 
-            let accTarget = 0, accReal = 0
-            for (const d of accDays) {
-                accTarget += Number(effectiveTargetByMachineDay[mid]?.[d] ?? 0)
-                accReal += Number(realByMachineDay[mid]?.[d] ?? 0)
+            // Acc Calculation
+            let accTarget = 0
+            let accReal = 0
+            for (const src of relevantSourceDaysForAcc) {
+                accTarget += Number(effectiveTargetByMachineDay[mid]?.[src] ?? 0)
+                accReal += Number(realByMachineDay[mid]?.[src] ?? 0)
             }
 
             rows.push({
@@ -428,7 +508,7 @@ export function ResultsPage() {
             return (a.machine.sort_order ?? 0) - (b.machine.sort_order ?? 0) || a.machine.code.localeCompare(b.machine.code)
         })
         return rows
-    }, [refDate, monthStart, effectiveTargetByMachineDay, realByMachineDay, dayList, machines, viewType, selectedDay])
+    }, [refDate, monthStart, effectiveTargetByMachineDay, realByMachineDay, dayList, machines, viewType, selectedDay, dayMergeMap])
 
     const grouped = useMemo(() => {
         const bySector = new Map<string, { sector: MachineRow['sector']; items: MachineMetrics[] }>()
@@ -539,10 +619,17 @@ export function ResultsPage() {
     const monthTitle = monthStart && effectiveRefDate ? `Produção — ${fmtMonthBR(monthStart)}` : 'Resultados'
     const displayRefDate = effectiveRefDate ?? refDate
 
-    // Label adicional para contabilidade quando sábado é movido
-    const saturdayMergedInfo = viewType === 'contabilidade' && refDate && isSaturday(dayjs(refDate))
-        ? `(Sáb ${fmtDayBR(refDate)} somado na Sexta)`
-        : null
+    // Label adicional se houver merge
+    const saturdayMergedInfo = useMemo(() => {
+        if (!refDate || !dayMergeMap) return null
+        // Check if effectiveRefDate (which is what we show) includes other days
+        const target = dayMergeMap[refDate] ?? refDate
+        const merged = dayList.filter(d => dayMergeMap[d] === target && d !== target)
+        if (merged.length > 0) {
+            return `(Inclui: ${merged.map(d => fmtDayBR(d)).join(', ')})`
+        }
+        return null
+    }, [refDate, dayMergeMap, dayList])
 
     function handleDayClick(dayIso: string) {
         if (selectedDay === dayIso) {
@@ -997,7 +1084,19 @@ export function ResultsPage() {
                 <MachineDetailModal
                     batchIds={batchIds}
                     machine={selectedMachine}
-                    day={selectedDay ?? refDate ?? ''}
+                    days={(() => {
+                        const raw = selectedDay ?? refDate ?? ''
+                        const target = dayMergeMap[raw] ?? raw
+                        // Encontrar todos os dias que mergeiam neste target
+                        const merged = dayList.filter(d => dayMergeMap[d] === target)
+                        return merged
+                    })()}
+                    // dayDesc is for display
+                    dayDesc={(() => {
+                        const raw = selectedDay ?? refDate ?? ''
+                        const target = dayMergeMap[raw] ?? raw
+                        return dayjs(target).format('DD/MM')
+                    })()}
                     viewType={viewType}
                     onClose={() => setSelectedMachine(null)}
                 />
@@ -1006,10 +1105,11 @@ export function ResultsPage() {
     )
 }
 
-function MachineDetailModal({ batchIds, machine, day, viewType, onClose }: {
+function MachineDetailModal({ batchIds, machine, days, dayDesc, viewType, onClose }: {
     batchIds: string[],
     machine: MachineRow,
-    day: string,
+    days: string[],
+    dayDesc: string,
     viewType: ViewType,
     onClose: () => void
 }) {
@@ -1021,12 +1121,7 @@ function MachineDetailModal({ batchIds, machine, day, viewType, onClose }: {
         async function fetch() {
             setLoading(true)
             try {
-                const targetDays = [day]
-                if (viewType === 'contabilidade' && dayjs(day).day() === 5) {
-                    // Sexta contábil inclui sábado
-                    targetDays.push(ymd(dayjs(day).add(1, 'day')))
-                }
-                const res = await fetchRawRowsForMachine(batchIds, machine.id, targetDays)
+                const res = await fetchRawRowsForMachine(batchIds, machine.id, days)
                 if (active) setRows(res)
             } catch (err) {
                 console.error(err)
@@ -1034,9 +1129,9 @@ function MachineDetailModal({ batchIds, machine, day, viewType, onClose }: {
                 if (active) setLoading(false)
             }
         }
-        fetch()
+        if (days.length > 0) fetch()
         return () => { active = false }
-    }, [batchIds, machine.id, day, viewType])
+    }, [batchIds, machine.id, days, viewType])
 
     const total = rows.reduce((acc, r) => acc + Number(r.hours ?? 0), 0)
 
@@ -1057,8 +1152,12 @@ function MachineDetailModal({ batchIds, machine, day, viewType, onClose }: {
                             {machine.code} — {machine.name_display}
                         </h3>
                         <p style={{ fontSize: '14px', color: '#64748b' }}>
-                            Extrato do dia <strong>{dayjs(day).format('DD/MM/YYYY')}</strong>
-                            {viewType === 'contabilidade' && dayjs(day).day() === 5 && ' (+Sábado)'}
+                            Extrato para <strong>{dayDesc}</strong>
+                            {days.length > 1 && (
+                                <span style={{ marginLeft: '6px', fontSize: '12px' }}>
+                                    (Inclui: {days.map(d => dayjs(d).format('DD/MM')).join(', ')})
+                                </span>
+                            )}
                         </p>
                     </div>
                     <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
