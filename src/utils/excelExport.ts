@@ -111,7 +111,6 @@ export async function generateResultsExcel(
         // Col C+: Days
 
         let colIdx = 3
-        const startColIdx = 3
 
         // Setup Row Labels
         const labelRowIdx = 3 // Dates Row
