@@ -103,5 +103,12 @@ export async function uploadAndProcessBatch(input: {
     }
   } catch (err: any) {
     return { ok: false, message: err?.message ?? 'Erro inesperado.' }
+  } finally {
+    // Tenta rodar a limpeza de dados antigos (sem bloquear o retorno)
+    // Mantém apenas 1 mês de dados raw
+    supabase.rpc('cleanup_old_raw_data', { months_to_keep: 1 }).then(({ error }) => {
+      if (error) console.error('Auto-cleanup verification failed:', error)
+      else console.log('Auto-cleanup verification ran successfully')
+    })
   }
 }

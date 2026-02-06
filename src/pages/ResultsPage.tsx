@@ -1199,7 +1199,9 @@ function MachineDetailModal({ batchIds, machine, days, dayDesc, viewType, onClos
                     <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>Carregando...</div>
                 ) : rows.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8', fontStyle: 'italic' }}>
-                        Nenhum registro encontrado para este dia.
+                        <div style={{ marginBottom: '8px', fontSize: '24px' }}>🗄️</div>
+                        Nenhum registro detalhado encontrado.<br />
+                        <span style={{ fontSize: '12px' }}>Os dados brutos podem ter sido arquivados para otimização de espaço.</span>
                     </div>
                 ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
